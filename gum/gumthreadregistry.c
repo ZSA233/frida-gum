@@ -30,6 +30,7 @@ struct _GumThreadRegistry
 enum
 {
   THREAD_ADDED,
+  THREAD_RENAMED,
   THREAD_REMOVED,
   LAST_SIGNAL
 };
@@ -54,6 +55,9 @@ gum_thread_registry_class_init (GumThreadRegistryClass * klass)
   gum_thread_registry_signals[THREAD_ADDED] = g_signal_new ("thread-added",
       G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_VOID__BOXED, G_TYPE_NONE, 1, GUM_TYPE_THREAD_DETAILS);
+  gum_thread_registry_signals[THREAD_RENAMED] = g_signal_new ("thread-renamed",
+      G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+      NULL, G_TYPE_NONE, 2, GUM_TYPE_THREAD_DETAILS, G_TYPE_STRING);
   gum_thread_registry_signals[THREAD_REMOVED] = g_signal_new ("thread-removed",
       G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_VOID__BOXED, G_TYPE_NONE, 1, GUM_TYPE_THREAD_DETAILS);
@@ -187,6 +191,50 @@ _gum_thread_registry_register (GumThreadRegistry * self,
 
   if (being_observed && !gum_cloak_has_thread (thread->id))
     g_signal_emit (self, gum_thread_registry_signals[THREAD_ADDED], 0, thread);
+}
+
+void
+_gum_thread_registry_rename (GumThreadRegistry * self,
+                             GumThreadId id,
+                             const gchar * name)
+{
+  gboolean being_observed;
+  GumThreadDetails * thread;
+  gchar * previous_name;
+  guint i;
+
+  GUM_THREAD_REGISTRY_LOCK (self);
+
+  being_observed = self->state != GUM_THREAD_REGISTRY_CREATED;
+
+  thread = NULL;
+  previous_name = NULL;
+  for (i = 0; i != self->threads->len; i++)
+  {
+    GumThreadDetails * candidate = g_ptr_array_index (self->threads, i);
+
+    if (candidate->id == id)
+    {
+      previous_name = g_strdup (candidate->name);
+
+      thread = g_slice_dup (GumThreadDetails, candidate);
+      thread->name = g_strdup (name);
+      g_ptr_array_remove_index (self->threads, i);
+      g_ptr_array_insert (self->threads, i, thread);
+
+      thread = gum_thread_details_copy (thread);
+      break;
+    }
+  }
+  g_assert (thread != NULL);
+
+  GUM_THREAD_REGISTRY_UNLOCK (self);
+
+  if (!gum_cloak_has_thread (id))
+    g_signal_emit (self, gum_thread_registry_signals[THREAD_RENAMED], 0,
+        thread, previous_name);
+
+  gum_thread_details_free (thread);
 }
 
 void

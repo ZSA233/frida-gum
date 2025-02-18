@@ -16,6 +16,8 @@ G_GNUC_INTERNAL void _gum_thread_registry_deactivate (GumThreadRegistry * self);
 
 G_GNUC_INTERNAL void _gum_thread_registry_register (GumThreadRegistry * self,
     const GumThreadDetails * thread);
+G_GNUC_INTERNAL void _gum_thread_registry_rename (GumThreadRegistry * self,
+    GumThreadId id, const gchar * name);
 G_GNUC_INTERNAL void _gum_thread_registry_unregister (GumThreadRegistry * self,
     GumThreadId id);
 
